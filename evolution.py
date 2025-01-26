@@ -1,15 +1,16 @@
 import random
 import uuid
-
 from enum import Enum
 from typing import Self, Optional
 
+from genes import Genes
 
 MAP_HEIGTH = 128
 MAP_WIDTH = 128
-PRIMORDIAL_BROTH_DENSITY = 0.5
-NUMBER_OF_ROUNDS = 1000
-MAX_LIFE_EXPECTANCY = 100
+PRIMORDIAL_BROTH_DENSITY = 0.001
+PRIMORDIAL_BROTH_DURATION = 1000
+NUMBER_OF_ROUNDS = 5000
+MAX_LIFE_EXPECTANCY = 1000
 
 
 class Direction(Enum):
@@ -41,20 +42,7 @@ class Decision:
         return cls(direction=direction, action=action)
     
     @classmethod
-    def get_from_raw_results(cls, results: tuple[
-        float, # north
-        float, # north-east
-        float, # east
-        float, # south-east
-        float, # south
-        float, # south-west
-        float, # west
-        float, # north-west
-        float, # stay and defend
-        float, # walk
-        float, # love
-        float # fight
-    ]) -> Self:
+    def get_from_raw_results(cls, results: list) -> Self:
         index_max_direction = max(range(0, 8), key=results.__getitem__)
         index_max_action = max(range(8, 12), key=results.__getitem__)
 
@@ -90,6 +78,9 @@ class Decision:
     @property
     def defended(self) -> bool:
         return self.action == Action.StayAndDefend
+    
+    def __str__(self):
+        return f"Decision(action={self.action}, direction={self.direction})"
 
 
 class Coordinates:
@@ -142,11 +133,7 @@ class Coordinates:
 class Cell:
     def __init__(self, coordinates: Coordinates):
         self.coordinates = coordinates
-
-        if random.uniform(0, 1) > (1 - PRIMORDIAL_BROTH_DENSITY):
-            self.creature = Creature.born_from_primordial_broth()
-        else:
-            self.creature = None
+        self.creature = None
     
     def get_empty_cell_nearby(self, field: list[list[Self]]) -> Optional[Self]:
         for direction in Direction:
@@ -155,6 +142,7 @@ class Cell:
                 neighbour = Cell.get(field=field, coordinates=coordinates)
                 if not neighbour.creature:
                     return neighbour
+        return None
 
     @staticmethod
     def get(field: list[list[Self]], coordinates: Coordinates) -> Self:
@@ -171,17 +159,9 @@ class Creature:
         self.satiety = False
 
         if father and mother:
-            self.genes = [0.0] # TODO
+            self.genes = Genes(father_genes=father.genes, mother_genes=mother.genes)
         else:
-            self.genes = [0.0] # TODO
-    
-    @classmethod
-    def born_from_primordial_broth(cls) -> Self:
-        return cls(father=None, mother=None)
-    
-    @classmethod
-    def born(cls, father: Self, mother: Self) -> Self:
-        return cls(father=father, mother=mother)
+            self.genes = Genes(None, None)
     
     def plan_move(self, neighbour_cells: dict[Direction:Optional[Cell]]) -> Decision:
         if self.age >= MAX_LIFE_EXPECTANCY:
@@ -201,7 +181,7 @@ class Creature:
         satiety = 1.0 if self.satiety else 0.0
         age = self.age / MAX_LIFE_EXPECTANCY
         
-        results = self.decide(
+        results = self.genes.decide(
             north_neighbour,
             north_neighbour_satiety,
             north_neighbour_age,
@@ -247,7 +227,7 @@ class Creature:
         self.satiety = False
 
     def similarity(self, creature: Self) -> float:
-        return random.uniform(0, 1) # TODO
+        return 0.0 # TODO
 
     def handle_direction(
         self,
@@ -266,71 +246,6 @@ class Creature:
                 age = neighbour_creature.age / MAX_LIFE_EXPECTANCY
                 return (1.0, satiety, age, self.similarity(creature=neighbour_creature))
         return (0.0, 0.0, 0.0, 0.0)
-
-    def decide(
-        self,
-        north_neighbour: float,
-        north_neighbour_satiety: float,
-        north_neighbour_age: float,
-        north_neighbour_similarity: float,
-        north_east_neighbour: float,
-        north_east_neighbour_satiety: float,
-        north_east_neighbour_age: float,
-        north_east_neighbour_similarity: float,
-        east_neighbour: float,
-        east_neighbour_satiety: float,
-        east_neighbour_age: float,
-        east_neighbour_similarity: float,
-        south_east_neighbour: float,
-        south_east_neighbour_satiety: float,
-        south_east_neighbour_age: float,
-        south_east_neighbour_similarity: float,
-        south_neighbour: float,
-        south_neighbour_satiety: float,
-        south_neighbour_age: float,
-        south_neighbour_similarity: float,
-        south_west_neighbour: float,
-        south_west_neighbour_satiety: float,
-        south_west_neighbour_age: float,
-        south_west_neighbour_similarity: float,
-        west_neighbour: float,
-        west_neighbour_satiety: float,
-        west_neighbour_age: float,
-        west_neighbour_similarity: float,
-        north_west_neighbour: float,
-        north_west_neighbour_satiety: float,
-        north_west_neighbour_age: float,
-        north_west_neighbour_similarity: float,
-        satiety: float,
-        age: float
-    ) -> tuple[
-        float, # north
-        float, # north-east
-        float, # east
-        float, # south-east
-        float, # south
-        float, # south-west
-        float, # west
-        float, # north-west
-        float, # stay and defend
-        float, # walk
-        float, # love
-        float # fight
-    ]:
-        return (
-            random.uniform(0, 1),
-            random.uniform(0, 1),
-            random.uniform(0, 1),
-            random.uniform(0, 1),
-            random.uniform(0, 1),
-            random.uniform(0, 1),
-            random.uniform(0, 1),
-            random.uniform(0, 1),
-            random.uniform(0, 1),
-            random.uniform(0, 1),
-            random.uniform(0, 1),
-            random.uniform(0, 1)
-        ) # TODO
     
     def __str__(self):
         return f"Creature(id={self.id}, age={self.age}, satiety={self.satiety})"
@@ -352,10 +267,14 @@ class Plan:
 class Map:
     field: list[list[Cell]]
     plans: list[Plan]
+    round: int
+    log: list[str]
 
     def __init__(self):
         self.field = [[]]
         self.plans = []
+        self.round = 0
+        self.log = []
 
         for y in range(0, MAP_HEIGTH):
             self.field.append([])
@@ -366,7 +285,9 @@ class Map:
     
     def run(self):
         for round in range(0, NUMBER_OF_ROUNDS):
-            print(f"round = {round}")
+            self.round = round
+            print(f"round = {self.round}")
+            self.log.append(f"round = {self.round}")
             self.plans = []
             lived_creatures = 0
 
@@ -378,7 +299,11 @@ class Map:
                         lived_creatures += 1
             for plan in self.plans:
                 self.resolve_plan(plan=plan)
+            self.log.append(f"lived creatures = {lived_creatures}")
             print(f"lived creatures = {lived_creatures}")
+        with open("log.txt", "w") as file:
+            for line in self.log:
+                file.write(f"{line}\n")
 
     def handle_plan_move(self, cell: Cell) -> Optional[Plan]:
         if cell.creature:
@@ -392,7 +317,15 @@ class Map:
                     neighbour_cells[direction] = None
             decision = cell.creature.plan_move(neighbour_cells=neighbour_cells)
             return Plan(cell=cell, decision=decision)
-        return None
+        else:
+            if random.uniform(0, 1) < self.born_from_primordial_broth_probability:
+                cell.creature = Creature(None, None)
+                self.log.append(f"creature was born from primordial broth {cell.creature}")
+            return None
+    
+    @property
+    def born_from_primordial_broth_probability(self) -> float:
+        return PRIMORDIAL_BROTH_DENSITY * (1 - (self.round / PRIMORDIAL_BROTH_DURATION))
     
     def resolve_plan(self, plan: Plan):
         if plan.cell.creature:
@@ -400,41 +333,92 @@ class Map:
             if coordinates:
                 target = Cell.get(field=self.field, coordinates=coordinates)
                 target_decision = next((p.decision for p in self.plans if p.cell == target), None)
-                if target_decision:
-                    self.resolve_plan_with_target(plan=plan, target=target, target_decision=target_decision)
-                    return
+                self.resolve_plan_with_target(plan=plan, target=target, target_decision=target_decision)
+                return
             self.resolve_plan_without_target(plan=plan)
 
-    def resolve_plan_with_target(self, plan: Plan, target: Cell, target_decision: Decision):
+    def resolve_plan_with_target(self, plan: Plan, target: Cell, target_decision: Optional[Decision]):
         match plan.decision.action:
+            case Action.StayAndDefend:
+                self.log.append(f"creature stay and defended {plan.cell.creature}")
             case Action.Walk:
                 if not target.creature:
                     target.creature = plan.cell.creature
                     plan.cell.creature = None
+                    self.log.append(f"creature move {plan.cell.creature}") # creature move None !!!!!!!!
+                else:
+                    self.log.append(f"creature want to move, but too crowd {plan.cell.creature}")
             case Action.Love:
-                if target.creature and plan.cell.creature.satiety and target.creature.satiety:
+                #if target.creature and plan.cell.creature.satiety and target.creature.satiety:
+                if target.creature and plan.cell.creature.satiety:
                     father = plan.cell.creature
                     mother = target.creature
-                    child = Creature.born(father=father, mother=mother)
-                    print(f"creature was born {child}")
                     father.starve()
                     mother.starve()
                     empty_cell = plan.cell.get_empty_cell_nearby(field=self.field)
                     if empty_cell:
-                        empty_cell.creature = child
+                        empty_cell.creature = Creature(father=father, mother=mother)
+                        self.log.append(f"creature was born {empty_cell.creature} from father {plan.cell.creature} and mother {target.creature}")
+                    else:
+                        self.log.append(f"creature was not born, because too crowd")
+                    empty_cell = plan.cell.get_empty_cell_nearby(field=self.field)
+                    if empty_cell:
+                        empty_cell.creature = Creature(father=father, mother=mother)
+                        self.log.append(f"creature was born {empty_cell.creature} from father {plan.cell.creature} and mother {target.creature}")
+                    empty_cell = plan.cell.get_empty_cell_nearby(field=self.field)
+                    if empty_cell:
+                        empty_cell.creature = Creature(father=father, mother=mother)
+                        self.log.append(f"creature was born {empty_cell.creature} from father {plan.cell.creature} and mother {target.creature}")
+                    empty_cell = plan.cell.get_empty_cell_nearby(field=self.field)
+                    if empty_cell:
+                        empty_cell.creature = Creature(father=father, mother=mother)
+                        self.log.append(f"creature was born {empty_cell.creature} from father {plan.cell.creature} and mother {target.creature}")
+                    empty_cell = plan.cell.get_empty_cell_nearby(field=self.field)
+                    if empty_cell:
+                        empty_cell.creature = Creature(father=father, mother=mother)
+                        self.log.append(f"creature was born {empty_cell.creature} from father {plan.cell.creature} and mother {target.creature}")
+                    empty_cell = plan.cell.get_empty_cell_nearby(field=self.field)
+                    if empty_cell:
+                        empty_cell.creature = Creature(father=father, mother=mother)
+                        self.log.append(f"creature was born {empty_cell.creature} from father {plan.cell.creature} and mother {target.creature}")
+                    empty_cell = plan.cell.get_empty_cell_nearby(field=self.field)
+                    if empty_cell:
+                        empty_cell.creature = Creature(father=father, mother=mother)
+                        self.log.append(f"creature was born {empty_cell.creature} from father {plan.cell.creature} and mother {target.creature}")
+                    empty_cell = plan.cell.get_empty_cell_nearby(field=self.field)
+                    if empty_cell:
+                        empty_cell.creature = Creature(father=father, mother=mother)
+                        self.log.append(f"creature was born {empty_cell.creature} from father {plan.cell.creature} and mother {target.creature}")
+                    empty_cell = plan.cell.get_empty_cell_nearby(field=self.field)
+                    if empty_cell:
+                        empty_cell.creature = Creature(father=father, mother=mother)
+                        self.log.append(f"creature was born {empty_cell.creature} from father {plan.cell.creature} and mother {target.creature}")
+                else:
+                    self.log.append(f"creature want to love, but there is no creature in target cell or creatures are not satiated {plan.cell.creature}")
             case Action.Fight:
-                if target.creature and not target_decision.defended:
-                    print(f"creature was killed {target.creature}")
+                if target.creature and target_decision and not target_decision.defended:
                     target.creature = None
                     plan.cell.creature.eat()
+                    self.log.append(f"creature kill other creature {plan.cell.creature}")
+                else:
+                    self.log.append(f"creature want to fight, but target defended or there is no creature in target {plan.cell.creature}")
             case Action.Die:
-                print(f"creature was died (with_target) {plan.cell.creature}")
                 plan.cell.creature = None
+                self.log.append(f"creature die from old age {plan.cell.creature}")
 
     def resolve_plan_without_target(self, plan: Plan):
-        if plan.decision.action == Action.Die:
-            print(f"creature was died (without_target) {plan.cell.creature}")
-            plan.cell.creature = None
+        match plan.decision.action:
+            case Action.StayAndDefend:
+                self.log.append(f"creature stay and defended (without target cell) {plan.cell.creature}")
+            case Action.Walk:
+                self.log.append(f"creature want to move, but there is no target cell {plan.cell.creature}")
+            case Action.Love:
+                self.log.append(f"creature want to love, but there is no target cell {plan.cell.creature}")
+            case Action.Fight:
+                self.log.append(f"creature want to fight, but there is no target cell {plan.cell.creature}")
+            case Action.Die:
+                plan.cell.creature = None
+                self.log.append(f"creature die from old age without target {plan.cell.creature}")
 
 
 map = Map()
