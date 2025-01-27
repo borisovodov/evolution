@@ -42,7 +42,7 @@ class Decision:
         return cls(direction=direction, action=action)
     
     @classmethod
-    def get_from_raw_results(cls, results: list) -> Self:
+    def from_raw_results(cls, results: list) -> Self:
         index_max_direction = max(range(0, 8), key=results.__getitem__)
         index_max_action = max(range(8, 12), key=results.__getitem__)
 
@@ -152,6 +152,94 @@ class Cell:
         return f"Cell(coordinates={self.coordinates}, creature={self.creature})"
 
 
+class CellContext:
+    def __init__(self, neighbour_cells: dict[Direction:Optional[Cell]]):
+        self.north_wall, self.north_neighbour, self.north_neighbour_satiety, self.north_neighbour_age, self.north_neighbour_similarity = self.handle_direction(direction=Direction.North, neighbour_cells=neighbour_cells)
+        self.north_east_wall, self.north_east_neighbour, self.north_east_neighbour_satiety, self.north_east_neighbour_age, self.north_east_neighbour_similarity = self.handle_direction(direction=Direction.NorthEast, neighbour_cells=neighbour_cells)
+        self.east_wall, self.east_neighbour, self.east_neighbour_satiety, self.east_neighbour_age, self.east_neighbour_similarity = self.handle_direction(direction=Direction.East, neighbour_cells=neighbour_cells)
+        self.south_east_wall, self.south_east_neighbour, self.south_east_neighbour_satiety, self.south_east_neighbour_age, self.south_east_neighbour_similarity = self.handle_direction(direction=Direction.SouthEast, neighbour_cells=neighbour_cells)
+        self.south_wall, self.south_neighbour, self.south_neighbour_satiety, self.south_neighbour_age, self.south_neighbour_similarity = self.handle_direction(direction=Direction.South, neighbour_cells=neighbour_cells)
+        self.south_west_wall, self.south_west_neighbour, self.south_west_neighbour_satiety, self.south_west_neighbour_age, self.south_west_neighbour_similarity = self.handle_direction(direction=Direction.SouthWest, neighbour_cells=neighbour_cells)
+        self.west_wall, self.west_neighbour, self.west_neighbour_satiety, self.west_neighbour_age, self.west_neighbour_similarity = self.handle_direction(direction=Direction.West, neighbour_cells=neighbour_cells)
+        self.north_west_wall, self.north_west_neighbour, self.north_west_neighbour_satiety, self.north_west_neighbour_age, self.north_west_neighbour_similarity = self.handle_direction(direction=Direction.NorthWest, neighbour_cells=neighbour_cells)
+        self.satiety = 0.0
+        self.age = 0.0
+
+    def set_satiety(self, satiety: bool):
+        self.satiety = 1.0 if satiety else 0.0
+
+    def set_age(self, age: int):
+        self.age = age / MAX_LIFE_EXPECTANCY
+
+    def handle_direction(
+        self,
+        direction: Direction,
+        neighbour_cells: dict[Direction:Optional[Cell]]
+    ) -> tuple[
+        float, # is cell wall
+        float, # is cell full
+        float, # satiety
+        float, # age
+        float # similarity
+    ]:
+        if neighbour_cells.get(direction):
+            if neighbour_cells.get(direction).creature:
+                neighbour_creature = neighbour_cells.get(direction).creature
+                satiety = 1.0 if neighbour_creature.satiety else 0.0
+                age = neighbour_creature.age / MAX_LIFE_EXPECTANCY
+                return (0.0, 1.0, satiety, age, 0.0) # TODO: self.similarity(creature=neighbour_creature)
+            else:
+               return (0.0, 0.0, 0.0, 0.0, 0.0)
+        return (1.0, 0.0, 0.0, 0.0, 0.0)
+    
+    @property
+    def output(self) -> list[float]:
+        return [
+            self.north_wall,
+            self.north_neighbour,
+            self.north_neighbour_satiety,
+            self.north_neighbour_age,
+            self.north_neighbour_similarity,
+            self.north_east_wall,
+            self.north_east_neighbour,
+            self.north_east_neighbour_satiety,
+            self.north_east_neighbour_age,
+            self.north_east_neighbour_similarity,
+            self.east_wall,
+            self.east_neighbour,
+            self.east_neighbour_satiety,
+            self.east_neighbour_age,
+            self.east_neighbour_similarity,
+            self.south_east_wall,
+            self.south_east_neighbour,
+            self.south_east_neighbour_satiety,
+            self.south_east_neighbour_age,
+            self.south_east_neighbour_similarity,
+            self.south_wall,
+            self.south_neighbour,
+            self.south_neighbour_satiety,
+            self.south_neighbour_age,
+            self.south_neighbour_similarity,
+            self.south_west_wall,
+            self.south_west_neighbour,
+            self.south_west_neighbour_satiety,
+            self.south_west_neighbour_age,
+            self.south_west_neighbour_similarity,
+            self.west_wall,
+            self.west_neighbour,
+            self.west_neighbour_satiety,
+            self.west_neighbour_age,
+            self.west_neighbour_similarity,
+            self.north_west_wall,
+            self.north_west_neighbour,
+            self.north_west_neighbour_satiety,
+            self.north_west_neighbour_age,
+            self.north_west_neighbour_similarity,
+            self.satiety,
+            self.age
+        ]
+
+
 class Creature:
     def __init__(self, father: Optional[Self], mother: Optional[Self]):
         self.id = uuid.uuid4()
@@ -169,56 +257,13 @@ class Creature:
         else:
             self.age += 1
         
-        north_neighbour, north_neighbour_satiety, north_neighbour_age, north_neighbour_similarity = self.handle_direction(direction=Direction.North, neighbour_cells=neighbour_cells)
-        north_east_neighbour, north_east_neighbour_satiety, north_east_neighbour_age, north_east_neighbour_similarity = self.handle_direction(direction=Direction.NorthEast, neighbour_cells=neighbour_cells)
-        east_neighbour, east_neighbour_satiety, east_neighbour_age, east_neighbour_similarity = self.handle_direction(direction=Direction.East, neighbour_cells=neighbour_cells)
-        south_east_neighbour, south_east_neighbour_satiety, south_east_neighbour_age, south_east_neighbour_similarity = self.handle_direction(direction=Direction.SouthEast, neighbour_cells=neighbour_cells)
-        south_neighbour, south_neighbour_satiety, south_neighbour_age, south_neighbour_similarity = self.handle_direction(direction=Direction.South, neighbour_cells=neighbour_cells)
-        south_west_neighbour, south_west_neighbour_satiety, south_west_neighbour_age, south_west_neighbour_similarity = self.handle_direction(direction=Direction.SouthWest, neighbour_cells=neighbour_cells)
-        west_neighbour, west_neighbour_satiety, west_neighbour_age, west_neighbour_similarity = self.handle_direction(direction=Direction.West, neighbour_cells=neighbour_cells)
-        north_west_neighbour, north_west_neighbour_satiety, north_west_neighbour_age, north_west_neighbour_similarity = self.handle_direction(direction=Direction.NorthWest, neighbour_cells=neighbour_cells)
+        context = CellContext(neighbour_cells=neighbour_cells)
+        context.set_satiety(satiety=self.satiety)
+        context.set_age(age=self.age)
         
-        satiety = 1.0 if self.satiety else 0.0
-        age = self.age / MAX_LIFE_EXPECTANCY
-        
-        results = self.genes.decide(
-            north_neighbour,
-            north_neighbour_satiety,
-            north_neighbour_age,
-            north_neighbour_similarity,
-            north_east_neighbour,
-            north_east_neighbour_satiety,
-            north_east_neighbour_age,
-            north_east_neighbour_similarity,
-            east_neighbour,
-            east_neighbour_satiety,
-            east_neighbour_age,
-            east_neighbour_similarity,
-            south_east_neighbour,
-            south_east_neighbour_satiety,
-            south_east_neighbour_age,
-            south_east_neighbour_similarity,
-            south_neighbour,
-            south_neighbour_satiety,
-            south_neighbour_age,
-            south_neighbour_similarity,
-            south_west_neighbour,
-            south_west_neighbour_satiety,
-            south_west_neighbour_age,
-            south_west_neighbour_similarity,
-            west_neighbour,
-            west_neighbour_satiety,
-            west_neighbour_age,
-            west_neighbour_similarity,
-            north_west_neighbour,
-            north_west_neighbour_satiety,
-            north_west_neighbour_age,
-            north_west_neighbour_similarity,
-            satiety,
-            age
-        )
+        results = self.genes.decide(context.output)
 
-        return Decision.get_from_raw_results(results)
+        return Decision.from_raw_results(results)
 
     def eat(self):
         self.satiety = True
@@ -228,24 +273,6 @@ class Creature:
 
     def similarity(self, creature: Self) -> float:
         return 0.0 # TODO
-
-    def handle_direction(
-        self,
-        direction: Direction,
-        neighbour_cells: dict[Direction:Optional[Cell]]
-    ) -> tuple[
-        float, # is cell full
-        float, # satiety
-        float, # age
-        float # similarity
-    ]:
-        if neighbour_cells.get(direction):
-            if neighbour_cells.get(direction).creature:
-                neighbour_creature = neighbour_cells.get(direction).creature
-                satiety = 1.0 if neighbour_creature.satiety else 0.0
-                age = neighbour_creature.age / MAX_LIFE_EXPECTANCY
-                return (1.0, satiety, age, self.similarity(creature=neighbour_creature))
-        return (0.0, 0.0, 0.0, 0.0)
     
     def __str__(self):
         return f"Creature(id={self.id}, age={self.age}, satiety={self.satiety})"
@@ -343,13 +370,12 @@ class Map:
                 self.log.append(f"creature stay and defended {plan.cell.creature}")
             case Action.Walk:
                 if not target.creature:
+                    self.log.append(f"creature move {plan.cell.creature}")
                     target.creature = plan.cell.creature
                     plan.cell.creature = None
-                    self.log.append(f"creature move {plan.cell.creature}") # creature move None !!!!!!!!
                 else:
                     self.log.append(f"creature want to move, but too crowd {plan.cell.creature}")
             case Action.Love:
-                #if target.creature and plan.cell.creature.satiety and target.creature.satiety:
                 if target.creature and plan.cell.creature.satiety:
                     father = plan.cell.creature
                     mother = target.creature
@@ -397,14 +423,14 @@ class Map:
                     self.log.append(f"creature want to love, but there is no creature in target cell or creatures are not satiated {plan.cell.creature}")
             case Action.Fight:
                 if target.creature and target_decision and not target_decision.defended:
+                    self.log.append(f"creature {plan.cell.creature} kill other creature {target.creature}")
                     target.creature = None
                     plan.cell.creature.eat()
-                    self.log.append(f"creature kill other creature {plan.cell.creature}")
                 else:
                     self.log.append(f"creature want to fight, but target defended or there is no creature in target {plan.cell.creature}")
             case Action.Die:
-                plan.cell.creature = None
                 self.log.append(f"creature die from old age {plan.cell.creature}")
+                plan.cell.creature = None
 
     def resolve_plan_without_target(self, plan: Plan):
         match plan.decision.action:
@@ -417,8 +443,8 @@ class Map:
             case Action.Fight:
                 self.log.append(f"creature want to fight, but there is no target cell {plan.cell.creature}")
             case Action.Die:
-                plan.cell.creature = None
                 self.log.append(f"creature die from old age without target {plan.cell.creature}")
+                plan.cell.creature = None
 
 
 map = Map()
